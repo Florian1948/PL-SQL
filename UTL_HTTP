@@ -25,12 +25,10 @@ FUNCTION GET_TOKEN(
         v_clientid varchar2(256);
         v_clientsecret varchar2(2000);
         v_content varchar2(4000);
+        v_length int;
 
         buffer varchar2(4000); 
         l_result varchar2(4000);
-        
-        --content_json varchar2(4000);
-        --v_length int;
         
         l_wallet_loc varchar2(100);
         l_wallet_pass varchar2(200);
