@@ -88,14 +88,15 @@ BEGIN
   IF v_text IS NOT NULL THEN
     UTL_SMTP.write_data(l_mail_conn, '--' || l_boundary || UTL_TCP.crlf);
     UTL_SMTP.write_data(l_mail_conn, 'Content-Type: text/plain; charset="UTF-8"' || UTL_TCP.crlf || UTL_TCP.crlf);
+    --UTL_SMTP.write_data(l_mail_conn, 'Content-Type: text/html; charset="UTF-8"' || UTL_TCP.crlf || UTL_TCP.crlf);
     
-    UTL_SMTP.write_data(l_mail_conn, v_text);
+    --UTL_SMTP.write_data(l_mail_conn, v_text);
+    UTL_SMTP.write_raw_data(l_mail_conn, v_text_raw);
     UTL_SMTP.write_data(l_mail_conn, UTL_TCP.crlf || UTL_TCP.crlf);
   END IF;
 
   UTL_SMTP.write_data(l_mail_conn, '--' || l_boundary || '--' || UTL_TCP.crlf);
   UTL_SMTP.close_data(l_mail_conn);
-
   UTL_SMTP.quit(l_mail_conn);
   
   EXCEPTION 
@@ -106,3 +107,138 @@ END;
 --END OF SEND_EMAIL_MULTIREC
 ----------------------------------
 ----------------------------------
+
+
+
+----------------------------------
+-- <b>SEND_EMAIL_MULTIRECIPIENT_WITH_ATTACHMENT</b>
+-- Desc: separate email addresses with colon(:), and will be processed in a loop
+-- source:
+----------------------------------
+PROCEDURE SEND_EMAIL_MULTIREC_ATTACH (
+                             p_to IN VARCHAR2,       /* recipients as varchar, separated with colon (:) */
+                             p_from IN VARCHAR2,     /* sender e.g.: db_admin@company.com */ 
+                             p_subject IN VARCHAR2,  /* subject field of the email */
+                             p_text IN VARCHAR2      /* body of the email */
+                             p_attach_mime IN VARCHAR2 DEFAULT 'application/pdf',  /* attachment mime type */
+                             p_attach_blob IN BLOB DEFAULT NULL,                   /* attachment in raw */
+                             p_attach_filename IN VARCHAR2                         /* filename for the attachment */
+                                       )
+AS
+    l_mail_conn   UTL_SMTP.connection;
+    l_boundary    VARCHAR2(50) := '----=*#abc1234321cba#*=';
+    l_step        PLS_INTEGER  := 12000; -- make sure you set a multiple of 3 not higher than 24573
+    
+    v_text varchar2(4000);
+    
+    v_smtp_host VARCHAR2(55);
+    v_smtp_port NUMBER DEFAULT 25;
+    v_from VARCHAR2(55);
+    v_user varchar2(255);
+    v_to varchar2(4000);
+    v_rec varchar2(255);
+    v_subject varchar2(55);
+
+    v_attachname varchar(255);
+    v_blob blob;
+    v_attach_mime varchar(255);
+
+    v_count INTEGER;
+    v_start INTEGER := 1;
+    v_chars INTEGER;
+    
+    errmsg varchar2(255);
+    errcode varchar2(55);
+    
+BEGIN
+     v_text := p_text;
+     v_subject := p_subject;
+    
+    v_smtp_host := <smtp host>;
+    v_smtp_port := <smtp port>;
+    v_from := p_from;
+    v_to := p_to;
+
+    v_attachname := p_attach_filename;
+    v_blob := p_attach_blob;
+    v_attach_mime := p_attach_mime;
+    
+    l_mail_conn := UTL_SMTP.open_connection(v_smtp_host, v_smtp_port);
+    
+    /* Counts how many recipients were in p_to */
+    v_count := REGEXP_COUNT(v_to, ':') + 1;
+ 
+  UTL_SMTP.helo(l_mail_conn, v_smtp_host);
+  UTL_SMTP.mail(l_mail_conn, v_from);
+  
+  /*DECODE RECEPIENTS*/
+    IF v_count = 1             /* only one recipient */
+            THEN 
+                v_rec := v_to;
+                UTL_SMTP.rcpt(l_mail_conn, v_rec);
+        ELSE                   /* more recipient */
+            FOR i IN 1..v_count LOOP
+             
+                IF i = 1       /* first case */
+                    THEN v_start := 1;
+                         v_chars := INSTR(v_to,':',1,i)-1;
+                
+                ELSIF i = v_count /* last case */
+                    THEN v_start := INSTR(v_to,':',1,i-1) + 1;
+                         v_chars := LENGTH(v_to)-(INSTR(v_to,':',1,i-1));
+                
+                                  /* all other case */
+                    ELSE v_start := INSTR(v_to,':',1,i-1) + 1;
+                         v_chars := INSTR(v_to,':',1,i)-INSTR(v_to,':',1,i-1)-1;
+                END IF;
+                
+                v_rec := SUBSTR(v_to, v_start, v_chars);
+                               
+               UTL_SMTP.rcpt(l_mail_conn, v_rec);
+            END LOOP;
+        END IF;
+  
+  UTL_SMTP.open_data(l_mail_conn);
+
+  UTL_SMTP.write_data(l_mail_conn, 'Date: ' || TO_CHAR(SYSDATE, 'DD-MON-YYYY HH24:MI:SS') || UTL_TCP.crlf);
+  UTL_SMTP.write_data(l_mail_conn, 'To: ' || v_to || UTL_TCP.crlf);
+  UTL_SMTP.write_data(l_mail_conn, 'From: ' || v_from || UTL_TCP.crlf);
+  UTL_SMTP.write_data(l_mail_conn, 'Subject: ' || v_subject || UTL_TCP.crlf);
+  UTL_SMTP.write_data(l_mail_conn, 'Reply-To: ' || v_from || UTL_TCP.crlf);
+  UTL_SMTP.write_data(l_mail_conn, 'MIME-Version: 1.0' || UTL_TCP.crlf);
+  UTL_SMTP.write_data(l_mail_conn, 'Content-Type: multipart/mixed; boundary="' || l_boundary || '"' || UTL_TCP.crlf || UTL_TCP.crlf);
+
+  IF v_text IS NOT NULL THEN
+    UTL_SMTP.write_data(l_mail_conn, '--' || l_boundary || UTL_TCP.crlf);
+    UTL_SMTP.write_data(l_mail_conn, 'Content-Type: text/plain; charset="UTF-8"' || UTL_TCP.crlf || UTL_TCP.crlf);
+    --UTL_SMTP.write_data(l_mail_conn, 'Content-Type: text/html; charset="UTF-8"' || UTL_TCP.crlf || UTL_TCP.crlf);
+    
+    --UTL_SMTP.write_data(l_mail_conn, v_text);
+    UTL_SMTP.write_raw_data(l_mail_conn, v_text_raw);
+    UTL_SMTP.write_data(l_mail_conn, UTL_TCP.crlf || UTL_TCP.crlf);
+  END IF;
+
+  IF v_attachname IS NOT NULL AND v_blob IS NOT NULL AND v_attach_mime IS NOT NULL THEN
+    UTL_SMTP.write_data(l_mail_conn, '--' || l_boundary || UTL_TCP.crlf);
+    UTL_SMTP.write_data(l_mail_conn, 'Content-Type: ' || v_attach_mime || '; name="' || v_attachname || '"' || UTL_TCP.crlf);
+    UTL_SMTP.write_data(l_mail_conn, 'Content-Transfer-Encoding: base64' || UTL_TCP.crlf);
+    UTL_SMTP.write_data(l_mail_conn, 'Content-Disposition: attachment; filename="' || v_attachname || '"' || UTL_TCP.crlf || UTL_TCP.crlf);
+
+    FOR i IN 0 .. TRUNC((DBMS_LOB.getlength(v_blob) - 1 )/l_step) LOOP
+      UTL_SMTP.write_data(l_mail_conn, UTL_RAW.cast_to_varchar2(UTL_ENCODE.base64_encode(DBMS_LOB.substr(v_blob, l_step, i * l_step + 1))));
+    END LOOP;
+
+
+  UTL_SMTP.write_data(l_mail_conn, '--' || l_boundary || '--' || UTL_TCP.crlf);
+  UTL_SMTP.close_data(l_mail_conn);
+  UTL_SMTP.quit(l_mail_conn);
+  
+  EXCEPTION 
+        WHEN OTHERS
+            THEN errmsg:=SQLERRM(SQLCODE); errcode:=SUBSTR(SQLERRM(SQLCODE),1,9); 
+                  DBMS_OUTPUT.PUT_LINE('Error code: ' || errcode || ' message: ' || errmsg);     /* for testing only */
+END;
+--END OF SEND_EMAIL_MULTIREC_ATTACH
+----------------------------------
+----------------------------------
+
