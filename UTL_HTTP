@@ -152,26 +152,14 @@ PROCEDURE POST_DATA(
         i number := 1;
         v_buffer varchar2(32767);
 
-buffer varchar2(4000); 
-        
-        --content_json varchar2(4000);
-        
+        buffer varchar2(4000); 
         l_result varchar2(4000);
-        
         v_batch_id int;
-                
        
-        
-        /*RESPONSE HEADER*/
-        resp_header1 varchar2(200);
-        resp_header2 varchar2(200);
         v_buffer_header varchar2(32000); 
         name  VARCHAR2(256);
         value VARCHAR2(1024);
-        v_resp_loc varchar2(400) default null;
-        v_resp_retry varchar2(400) default null;
-        v_resp_uuid varchar2(400) default null;
-
+       
         /* exceptions */
         ex_token_null exception;
         ex_batch_not_found exception;
