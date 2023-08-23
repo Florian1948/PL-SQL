@@ -1,0 +1,6 @@
+SELECT 
+    to_timestamp('2023-08-23 10:00','yyyy-mm-dd hh24:mi') 
+    ,sysdate as today
+    ,(sysdate - to_timestamp('2023-08-23 10:00','yyyy-mm-dd hh24:mi')) as diff
+    ,EXTRACT(minute FROM (sysdate - to_timestamp('2023-08-23 10:00','yyyy-mm-dd hh24:mi') )) diff_minutes
+FROM dual;
