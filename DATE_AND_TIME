@@ -43,7 +43,7 @@
     ----------------------------------
     -- f_convert_utc_to_epoch
     -- Desc:
-    -- source: trust me bro'
+    -- source:
     ----------------------------------
     FUNCTION F_CONVERT_UTC_TO_EPOCH (p_timestamp IN timestamp)
         RETURN number
