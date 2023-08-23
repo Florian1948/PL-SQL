@@ -13,4 +13,59 @@
         ,EXTRACT(minute FROM (sysdate - to_timestamp('2023-08-23 10:00','yyyy-mm-dd hh24:mi') )) diff_minutes
     FROM dual;
 
+/* EPOCH TIME FUNCTION */
+    ----------------------------------
+    -- f_convert_epoch_to_gmt2
+    -- Converting UNIX EPOCH utc time to gmt2 with awareness of time savings
+    -- source: https://asktom.oracle.com/pls/apex/asktom.search%3Ftag%3Dconvert-database-server-sysdate-to-gmt-date-and-daylight-saving-aware
+    ----------------------------------
+    FUNCTION F_CONVERT_EPOCH_TO_GMT2(p_epoch IN number) 
+        RETURN timestamp
+    IS
+        l_ret_tmstmp timestamp;
+        l_epoch number;
+    
+    BEGIN
+        l_epoch := p_epoch;
+        l_ret_tmstmp := date'1970-01-01' + (p_epoch/24/60/60);
+    
+        --DBMS_OUTPUT.PUT_LINE('EPOCH: ' || to_char(epochtime));
+        --DBMS_OUTPUT.PUT_LINE('GETDATE: ' || to_char(l_ret_tmstmp, 'YYYY. MM. DD. HH24:MI:SS'));
+        l_ret_tmstmp := l_ret_tmstmp + (substr(tz_offset(dbtimezone),1,1)||'1')*to_dsinterval('0 '||substr(tz_offset( DBTIMEZONE ),2, 5)||':00');
+        --DBMS_OUTPUT.PUT_LINE('GETDATE: ' || to_char(l_ret_tmstmp, 'YYYY. MM. DD. HH24:MI:SS'));
+    
+        RETURN l_ret_tmstmp;
+    
+    END;
 
+    ----------------------------------
+    -- f_convert_utc_to_epoch
+    -- Desc:
+    -- source: trust me bro'
+    ----------------------------------
+    FUNCTION F_CONVERT_UTC_TO_EPOCH (p_timestamp IN timestamp)
+        RETURN number
+        
+    IS
+        l_ret_epoch number;
+        l_tmstmp timestamp;
+    
+    BEGIN
+        l_tmstmp := p_timestamp;
+    
+            SELECT ts_epoch INTO l_ret_epoch 
+            FROM ( 
+                  /* Convert datetime in the Berlin timezone to an interval */
+                  SELECT timestamp'2023-05-16 00:00:01 Europe/Budapest'
+                       - timestamp'1970-01-01 00:00:00 UTC' epoch_dsi
+                  FROM dual
+            ) cross apply (
+              SELECT EXTRACT ( day FROM epoch_dsi ) * 86400 
+                       + EXTRACT ( hour FROM epoch_dsi ) * 3600
+                       + EXTRACT ( minute FROM epoch_dsi ) * 60
+                       + TRUNC ( EXTRACT ( second FROM epoch_dsi ) ) ts_epoch
+              FROM   dual
+            );
+        
+        return l_ret_epoch;
+    END;
