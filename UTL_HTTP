@@ -24,10 +24,11 @@ FUNCTION GET_TOKEN(
         v_proxy varchar2(256);
         v_clientid varchar2(256);
         v_clientsecret varchar2(2000);
-
-        --buffer varchar2(4000); 
-        --l_result varchar2(4000);
         v_content varchar2(4000);
+
+        buffer varchar2(4000); 
+        l_result varchar2(4000);
+        
         --content_json varchar2(4000);
         --v_length int;
         
@@ -79,5 +80,37 @@ FUNCTION GET_TOKEN(
         /* GET REQUEST RESPONSE */
         res := UTL_HTTP.GET_RESPONSE(req);
 
+        /* PROCESSING RESPONSE BODY */
+        BEGIN
+            LOOP
+              UTL_HTTP.READ_LINE(res, buffer);
+              l_result := l_result || buffer;
+            END LOOP;
+            UTL_HTTP.END_RESPONSE(res);
+              
+        EXCEPTION
+            WHEN UTL_HTTP.END_OF_BODY 
+            THEN UTL_HTTP.END_RESPONSE(res);
+        END;
 
+        /*  CLOSE HTTP CONNECTIONS */
+        UTL_HTTP.DESTROY_REQUEST_CONTEXT(request_context);
+        UTL_HTTP.END_REQUEST(req);
 
+        /* EXRTACT TOKEN FROM RESPONSE */
+        IF res.STATUS_CODE = 200 
+            THEN v_ret := JSON_VALUE(l_result, '$.access_token');
+        ELSE v_ret := '-1'; /* RETURNING -1 IF NOT SUCCEEDED  */
+        END IF;
+    
+    RETURN v_ret;
+
+    EXCEPTION 
+        WHEN OTHERS
+            THEN errmsg:=SQLERRM(SQLCODE); errcode:=SUBSTR(SQLERRM(SQLCODE),1,9); 
+                 SELECT UTL_HTTP.GET_DETAILED_SQLERRM INTO errmsg_det FROM dual; /* UTL_HTTP has a detailed message that can be more helpful in case of errors */
+                 UTL_HTTP.DESTROY_REQUEST_CONTEXT(request_context);
+                 UTL_HTTP.END_REQUEST (req);
+                 RETURN '-1';
+    END;
+------------------------------------------------------------------------
