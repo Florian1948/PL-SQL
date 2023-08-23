@@ -1,0 +1,83 @@
+------------------------------------------------------------------------
+--Desc: A function to initiate a http request for token (oauth2 flow)
+------------------------------------------------------------------------
+------------------------------------------------------------------------
+FUNCTION GET_TOKEN(
+                  p_url IN VARCHAR2,    /* The URL of the idp server / token provider */
+                  p_clientid IN varchar2(256),
+                  p_clientsecret IN varchar2(2000),
+                  p_proxy IN varchar2(256) DEFAULT null
+) 
+    
+    RETURN varchar2
+    
+    IS
+        req utl_http.req;
+        res utl_http.resp;
+        request_context UTL_HTTP.REQUEST_CONTEXT_KEY;
+        
+        errmsg varchar2(255);
+        errmsg_det varchar2(255);
+        errcode varchar2(55);
+
+        v_url varchar2(256);
+        v_proxy varchar2(256);
+        v_clientid varchar2(256);
+        v_clientsecret varchar2(2000);
+
+        --buffer varchar2(4000); 
+        --l_result varchar2(4000);
+        v_content varchar2(4000);
+        --content_json varchar2(4000);
+        --v_length int;
+        
+        l_wallet_loc varchar2(100);
+        l_wallet_pass varchar2(200);
+        
+        v_ret varchar2(4000) default '-1';
+
+    BEGIN
+
+        /* SET UP PARAMETERS */
+        v_url := p_url;
+        v_clientid := p_clientid;
+        v_clientsecret := p_clientsecret;
+        
+        /* SET UP PROXY IF NECESSARY */
+        IF p_proxy IS NOT NULL THEN
+          v_proxy := p_proxy;
+          UTL_HTTP.SET_PROXY(v_proxy);
+        END IF;
+
+        /* SET UP WALLET AND CONTEXT */
+        l_wallet_loc := <GET WALLET LOCATION >;
+        l_wallet_pass := <GET WALLET PSW>;
+        --UTL_HTTP.set_wallet (l_wallet_loc, l_wallet_pass);     /* DO NOT USE, it can cause errors like invalid cdertificate. Use REQUEST_CONTEXT instead */
+        request_context := UTL_HTTP.CREATE_REQUEST_CONTEXT(
+                               wallet_path          => l_wallet_loc,
+                               wallet_password      => l_wallet_pass,
+                               enable_cookies       => TRUE,
+                               max_cookies          => 300,
+                               max_cookies_per_site => 20);
+
+        v_content := 'grant_type=client_credentials'
+            ||'&scope=<INSERT SCOPE HERE>&client_id=' || v_clientid || '&client_secret=' || v_clientsecret;
+        v_length := length(v_content);
+
+        -- Ask UTL_HTTP not to raise an exception for 4xx and 5xx status codes,
+        -- rather than just returning the text of the error page. 
+       UTL_HTTP.set_response_error_check(false);
+
+        /* MAKE REQUEST */
+        req := UTL_HTTP.BEGIN_REQUEST(v_url, 'POST', 'HTTP/1.1', request_context);   
+        /* ENCODED HEADER */
+        UTL_HTTP.SET_HEADER(req, 'Content-Type', 'application/x-www-form-urlencoded;charset=utf-8'); 
+        UTL_HTTP.SET_HEADER (req, 'Content-Length', v_length);
+        /* WRITE BODY */  
+        UTL_HTTP.WRITE_TEXT(req, v_content);
+
+        /* GET REQUEST RESPONSE */
+        res := UTL_HTTP.GET_RESPONSE(req);
+
+
+
