@@ -6,7 +6,7 @@ FUNCTION GET_TOKEN(
                   p_url IN VARCHAR2,    /* The URL of the idp server / token provider */
                   p_clientid IN varchar2(256),
                   p_clientsecret IN varchar2(2000),
-                  p_proxy IN varchar2(256) DEFAULT null
+                  p_proxy IN varchar2(256) DEFAULT null    /* e.g. proxyuser:proxy_psw@proxy_host*/
 ) 
     
     RETURN varchar2
@@ -49,9 +49,9 @@ FUNCTION GET_TOKEN(
         END IF;
 
         /* SET UP WALLET AND CONTEXT */
-        l_wallet_loc := <GET WALLET LOCATION >;
+        l_wallet_loc := <GET WALLET LOCATION e.g. file:F:\oracle\admin\SID\wallet>;
         l_wallet_pass := <GET WALLET PSW>;
-        --UTL_HTTP.set_wallet (l_wallet_loc, l_wallet_pass);     /* DO NOT USE, it can cause errors like invalid cdertificate. Use REQUEST_CONTEXT instead */
+        --UTL_HTTP.set_wallet (l_wallet_loc, l_wallet_pass);     /* DO NOT USE, it can cause errors like invalid cdertificate (ORA-29024). Use REQUEST_CONTEXT instead */
         request_context := UTL_HTTP.CREATE_REQUEST_CONTEXT(
                                wallet_path          => l_wallet_loc,
                                wallet_password      => l_wallet_pass,
@@ -112,3 +112,244 @@ FUNCTION GET_TOKEN(
                  RETURN '-1';
     END;
 ------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------
+--Desc: A procedure to initiate a http request for posting long data 
+------------------------------------------------------------------------
+------------------------------------------------------------------------
+PROCEDURE POST_DATA(
+                        p_url IN VARCHAR2,    /* The URL of the idp server / token provider */
+                        p_proxy IN varchar2(256) DEFAULT null
+) 
+    
+    IS
+        CURSOR c_cursor IS SELECT <COLUMN> FROM <TABLE NAME> WHERE <CONDITIONS>;
+        r_batch c_cursor%ROWTYPE;
+        v_batch_count int;
+        v_loop_count int default 1;
+        
+        request_context UTL_HTTP.REQUEST_CONTEXT_KEY;
+        req utl_http.req;
+        res utl_http.resp;
+        
+        errmsg varchar2(255);
+        errmsg_det varchar2(255);
+        errcode varchar2(55);
+
+        v_url varchar2(256);
+        v_proxy varchar2(256);
+        v_token varchar2(4000);
+        t_content varchar2(4000);
+        v_json CLOB;
+        v_length int;
+        v_count int;
+
+        l_wallet_loc varchar2(100);
+        l_wallet_pass varchar2(200); 
+        amount          NUMBER := 25000;
+        offset          NUMBER := 1;
+        i number := 1;
+        v_buffer varchar2(32767);
+
+buffer varchar2(4000); 
+        
+        --content_json varchar2(4000);
+        
+        l_result varchar2(4000);
+        
+        v_batch_id int;
+                
+       
+        
+        /*RESPONSE HEADER*/
+        resp_header1 varchar2(200);
+        resp_header2 varchar2(200);
+        v_buffer_header varchar2(32000); 
+        name  VARCHAR2(256);
+        value VARCHAR2(1024);
+        v_resp_loc varchar2(400) default null;
+        v_resp_retry varchar2(400) default null;
+        v_resp_uuid varchar2(400) default null;
+
+        /* exceptions */
+        ex_token_null exception;
+        ex_batch_not_found exception;
+        ex_multiple_batch_found exception;
+        
+
+BEGIN
+        /* SET UP PARAMETERS */
+        v_url := p_url;
+        
+        /* SET UP PROXY IF NECESSARY */
+        IF p_proxy IS NOT NULL THEN
+          v_proxy := p_proxy;
+          UTL_HTTP.SET_PROXY(v_proxy);
+        END IF;
+
+        /* SET UP WALLET AND CONTEXT */
+        l_wallet_loc := <GET WALLET LOCATION >;
+        l_wallet_pass := <GET WALLET PSW>;
+        --UTL_HTTP.set_wallet (l_wallet_loc, l_wallet_pass);     /* DO NOT USE, it can cause errors like invalid cdertificate. Use REQUEST_CONTEXT instead */
+        request_context := UTL_HTTP.CREATE_REQUEST_CONTEXT(
+                               wallet_path          => l_wallet_loc,
+                               wallet_password      => l_wallet_pass,
+                               enable_cookies       => TRUE,
+                               max_cookies          => 300,
+                               max_cookies_per_site => 20);
+
+        /* GET TOKEN for AUTH */
+        v_token := GET_TOKEN(<token_url><client_id><client_secret><proxy_optional>);
+        IF token is null OR token = '-1' THEN  RAISE ex_token_null; END IF;
+        t_content  := 'Bearer ' || v_token;
+
+--START CURSOR
+     OPEN c_cursor;
+        LOOP
+            FETCH c_cursor into r_batch;
+                EXIT WHEN c_cursor%NOTFOUND;  
+
+
+        /* GET CLOB TO SEND, THIS CASE IT IS A JSON */
+        v_json := '';
+        SELECT count(*) INTO v_count FROM <TABLE NAME> WHERE <CONDITIONS>;
+        IF v_count < 1 THEN RAISE ex_batch_not_found;
+        ELSIF v_count > 1 THEN RAISE ex_multiple_batch_found;
+        ELSE
+            Select <CLOB COLUMN> INTO v_json FROM <TABLE NAME> WHERE <CONDITIONS>;
+        END IF;
+        v_length := length(v_json);
+
+        -- Ask UTL_HTTP not to raise an exception for 4xx and 5xx status codes,
+        -- rather than just returning the text of the error page. 
+        UTL_HTTP.set_response_error_check(false);
+
+        /* MAKE REQUEST */
+        req := UTL_HTTP.BEGIN_REQUEST(v_url, 'POST', 'HTTP/1.1', request_context); 
+
+            /* THIS PART IS FOR THE CASE WHEN THIS WHOLE PROCEDURE CALLED MULTIPLE TIME, 
+                POSTING SEVERAL JSON DATA TO THE SAME PLACE, THEN KEEPS THE CONNECTION OPEN
+                AFTER THE REQUEST SENT FOR THE NEXT REQUEST */
+            /* MAKE REQUEST PERSISTENT, EXCEPT FOR THE LAST ONE */ 
+            --IF (v_loop_count < v_batch_count) THEN
+            --    UTL_HTTP.SET_PERSISTENT_CONN_SUPPORT(req, TRUE);
+            --END IF;
+
+        
+        /* HEADER */
+        UTL_HTTP.SET_HEADER(req, 'Authorization', t_content);
+        UTL_HTTP.SET_HEADER(req, 'content-type', 'application/json');
+
+        /* WRITE BODY */  
+        UTL_HTTP.SET_BODY_CHARSET(req, 'UTF-8');  /* In case of special charachters éáőúűóüí etc... */
+        /* HANDLE LONG CONTENT */
+            --Message data under 32kb limit
+               IF v_length <= 32767 THEN
+                UTL_HTTP.SET_HEADER(req, 'Content-Length', lengthb(v_json));
+                UTL_HTTP.WRITE_RAW(req, UTL_RAW.CAST_TO_RAW(v_json));
+               
+            -- If Message data more than 32kb   
+               ELSIF v_length > 32767 THEN
+                UTL_HTTP.SET_HEADER(req , 'Transfer-Encoding', 'chunked');
+                UTL_HTTP.SET_HEADER(req , 'Connection', 'keep-alive');
+    
+            /* RESET BODY PARAMETERS - FOR THE CASE OF MULTIPLE REQUEST */
+               offset := 1;
+               v_buffer := '';
+               amount := 25000; /* DO NOT REMOVE THIS! */
+               v_buffer_header := '';
+               v_resp_loc := '';
+               v_resp_retry := '';
+               v_resp_uuid := '';
+               l_result := '';
+
+                    WHILE (offset < v_length)
+                       LOOP
+                            BEGIN
+                              DBMS_LOB.READ(v_json, amount, offset, v_buffer);
+                                 
+                            EXCEPTION
+                                WHEN OTHERS THEN
+                                     errmsg:=SQLERRM(SQLCODE); errcode:=SUBSTR(SQLERRM(SQLCODE),1,9); 
+                            END;    
+                            
+                            BEGIN               
+                                UTL_HTTP.WRITE_RAW(req, UTL_RAW.CAST_TO_RAW(v_buffer));
+                            EXCEPTION
+                              WHEN OTHERS THEN    
+                                errmsg:=SQLERRM(SQLCODE); errcode:=SUBSTR(SQLERRM(SQLCODE),1,9); 
+                            END;  
+                            
+                        offset := offset + amount;
+                    END LOOP;
+                END IF;
+
+        /* GET REQUEST RESPONSE */
+        res := UTL_HTTP.GET_RESPONSE(req);
+
+    /* PROCESSING RESPONSE HEADER */
+    BEGIN
+            /* exctract all values */
+            FOR i IN 1..UTL_HTTP.GET_HEADER_COUNT(res) LOOP
+                UTL_HTTP.GET_HEADER(res, i, name, value); 
+                v_buffer_header := v_buffer_header ||' '|| name || ': ' || value;
+
+            END LOOP;
+            /* exctract specific values */
+            --UTL_HTTP.GET_HEADER_BY_NAME(res, '<value name>', v_header);
+    EXCEPTION
+                    WHEN UTL_HTTP.HEADER_NOT_FOUND THEN
+                            <do your code>; 
+                    WHEN UTL_HTTP.REQUEST_FAILED THEN
+                            SELECT UTL_HTTP.GET_DETAILED_SQLERRM INTO errmsg_det FROM dual; /* UTL_HTTP has a detailed message that can be more helpful in case of errors */
+                            errmsg:=SQLERRM(SQLCODE); errcode:=SUBSTR(SQLERRM(SQLCODE),1,9); 
+                            <do your code>;
+    END;
+
+
+    /* PROCESSING RESPONSE BODY */
+        BEGIN
+            LOOP
+              UTL_HTTP.READ_LINE(res, buffer);
+              l_result := l_result || buffer;
+            END LOOP;
+            UTL_HTTP.END_RESPONSE(res);
+              
+        EXCEPTION
+            WHEN UTL_HTTP.END_OF_BODY 
+            THEN UTL_HTTP.END_RESPONSE(res);
+        END;
+
+    /* IN CASE OF LOOPING */
+    --v_loop_count := v_loop_count + 1;
+/*END CURSOR*/
+        END LOOP;
+            CLOSE c_cursor; 
+
+/*  CLOSE HTTP CONNECTIONS */
+    UTL_HTTP.DESTROY_REQUEST_CONTEXT(request_context);
+    UTL_HTTP.END_REQUEST (req);
+
+ EXCEPTION 
+        WHEN ex_token_null
+            THEN <do your code>;
+                UTL_HTTP.END_REQUEST (req); UTL_HTTP.DESTROY_REQUEST_CONTEXT(request_context);
+        WHEN ex_null_batch
+            THEN <do your code>;
+                UTL_HTTP.END_REQUEST (req); UTL_HTTP.DESTROY_REQUEST_CONTEXT(request_context);
+        WHEN ex_batch_not_found
+            THEN <do your code>;
+                UTL_HTTP.END_REQUEST (req); UTL_HTTP.DESTROY_REQUEST_CONTEXT(request_context);
+        WHEN ex_multiple_batch_found
+            THEN <do your code>;
+                UTL_HTTP.END_REQUEST (req); UTL_HTTP.DESTROY_REQUEST_CONTEXT(request_context);
+
+        WHEN OTHERS
+            THEN errmsg:=SQLERRM(SQLCODE); errcode:=SUBSTR(SQLERRM(SQLCODE),1,9); 
+                SELECT UTL_HTTP.GET_DETAILED_SQLERRM INTO errmsg_det FROM dual;
+                 <do your code>;
+                 UTL_HTTP.END_REQUEST(req);
+                 UTL_HTTP.END_RESPONSE(res); 
+                 UTL_HTTP.DESTROY_REQUEST_CONTEXT(request_context);
+END;
