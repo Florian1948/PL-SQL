@@ -1,0 +1,88 @@
+--==============================================================================
+--Desc.: Export data to csv/txt file
+--==============================================================================
+PROCEDURE P_EXPORT_TO_CSV 
+IS
+    file_exist bfile;
+    file_is_there number;
+    file_handle UTL_FILE.FILE_TYPE;
+    file_dir  varchar2(255);
+    file_name  varchar2(255);
+    file_line varchar2(1024);
+
+    errmsg varchar2(255);
+    errcode varchar2(55);
+
+    file_is_in_use  exception;
+    file_is_already_there exception; 
+
+
+CURSOR get_data IS <insert SELECT here>
+    cursor_row get_data%ROWTYPE;
+
+BEGIN
+    --VALUE DEFINITIONS
+    file_dir := '<DIR NAME>';
+    file_name := '<filename>_'||to_char(TRUNC(ADD_MONTHS(sysdate,-1),'MONTH'),'YYYYMM')||'.csv';
+    file_exist := bfilename(file_dir, file_name);
+
+    Select dbms_lob.fileexists(file_exist) into file_is_there from dual;
+
+    --CHECK IF FILE IS ALREADY THERE
+    IF file_is_there = 1 THEN
+        UTL_FILE.FREMOVE(file_dir,file_name);
+    END IF;
+
+    file_handle:= UTL_FILE.FOPEN_NCHAR(file_dir,file_name,'w');
+
+    --CHECK IF THE FILE IN USE   
+    IF UTL_FILE.IS_OPEN(file_handle) = FALSE
+        THEN RAISE file_is_in_use;
+    END IF;
+
+    --ADD BOM TO FILE
+    UTL_FILE.PUT_RAW(file_handle, HexToRaw('EFBBBF'));
+
+    --LOOP THROUGH CURSOR
+    OPEN get_data;
+      LOOP
+        FETCH get_data INTO cursor_row;
+        EXIT WHEN get_data%NOTFOUND;
+    
+        file_line:= ''||to_nchar(cursor_row.<COLUMN NAME>)||''
+        || ';'||to_nchar(cursor_row.<COLUMN NAME>)||''
+        || ';'||to_nchar(cursor_row.<COLUMN NAME>)||'' 
+        || ';'||to_nchar(cursor_row.<COLUMN NAME>)||''  
+        || ';'||to_nchar(cursor_row.<COLUMN NAME>)||''  
+        || ';'||to_nchar(cursor_row.<COLUMN NAME>)||''  
+        || ';'||to_nchar(cursor_row.<COLUMN NAME>)||''
+        || ';'||to_nchar(cursor_row.<COLUMN NAME>)||''
+        || ';'||to_nchar(cursor_row.<COLUMN NAME>)||'';
+    
+        UTL_FILE.PUT_LINE_NCHAR(file_handle, to_nchar(file_line));
+    
+      END LOOP;
+    CLOSE get_data;
+
+
+    UTL_FILE.FFLUSH(file_handle);
+
+    --UTL_FILE.FCLOSE(file_handle);
+    UTL_FILE.FCLOSE_ALL;
+
+    EXCEPTION 
+        WHEN file_is_in_use
+            THEN <do your code>
+                UTL_FILE.FCLOSE_ALL;
+        WHEN file_is_already_there
+            THEN <do your code>
+                UTL_FILE.FCLOSE_ALL;
+
+        WHEN OTHERS
+            THEN errmsg:=SQLERRM(SQLCODE); errcode:=SUBSTR(SQLERRM(SQLCODE),1,9); 
+                 <do your code>
+                     UTL_FILE.FCLOSE_ALL;
+
+
+
+END;
