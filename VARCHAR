@@ -5,3 +5,15 @@ SELECT substr('123456',3) FROM dual;
 
 --Characters from the right
 SELECT substr('123456',-3) FROM dual;
+
+--Regexp
+REGEXP_REPLACE(v_param, '\(\d{4}\)', '')
+    --replace 4 digits between (nnnn) to nothing
+
+REGEXP_SUBSTR(v_param, '(\d{2}%)|(\d{2},\d{1}%)' )
+  --Extracts nn% OR nn,n% from string
+    --() defines case
+    --\d matches digit char
+    --\d{2} matches 2 digit chars
+    --\d{2},\d{1} matches 2 digit chars + , + 1 digit char
+    --\d{2},\d{1}% matches 2digit , and 1 digit and % --> e.g. 37,5%
