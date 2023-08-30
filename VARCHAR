@@ -1,0 +1,7 @@
+/* Collection of varchar functions */
+
+--Characters from the left
+SELECT substr('123456',3) FROM dual;
+
+--Characters from the right
+SELECT substr('123456',-3) FROM dual;
