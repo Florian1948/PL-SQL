@@ -15,6 +15,28 @@
     FROM dual;
 
 
+/* START AND END DATE FROM P_YEAR & P_MONTH */
+        SET SERVEROUTPUT ON
+        DECLARE 
+        
+                p_year int default 2023;
+                p_month int default 12;
+                v_date_from date;
+                v_date_to date;
+                
+        BEGIN
+                
+                v_date_from := to_date(to_char(p_year) || lpad(to_char(p_month),2,'0') || '01', 'yyyymmdd');
+                v_date_to := (ADD_MONTHS(to_date(to_char(p_year) || lpad(to_char(p_month),2,'0') || '01', 'yyyymmdd'),1)-1);
+                
+                DBMS_OUTPUT.PUT_LINE('v_date_from: ');
+                DBMS_OUTPUT.PUT_LINE(v_date_from);
+                DBMS_OUTPUT.PUT_LINE('v_date_to: ');
+                DBMS_OUTPUT.PUT_LINE(v_date_to);
+                
+                
+        END;
+
 /* EPOCH TIME FUNCTION */
     ----------------------------------
     -- f_convert_epoch_to_gmt2
