@@ -1,4 +1,11 @@
 /* Collection of varchar functions */
+--Remove bad charachters for matching e.g. filtering
+TRANSLATE(column_name,'áéíóöúüouÁÉÍÓÚÜOUä','aeioouuouAEIOUUOUa')
+
+--Remove all non-digit characters
+regexp_replace(column_name, '[^0-9]', '')
+OR
+regexp_replace(column_name, '[^[:digit:]]', '')
 
 --Characters from the left
 SELECT substr('123456',3) FROM dual;
