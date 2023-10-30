@@ -1,0 +1,51 @@
+/*
+  FUNCTION TO ATHENTICATE USER IN LDAPs
+*/
+--==============================================================================
+FUNCTION F_LDAPS_AUTH(
+  p_username IN VARCHAR2,
+  p_password IN VARCHAR2
+)
+RETURN NUMBER IS
+  l_ldap_host     VARCHAR2(256) := <hostname>;
+  l_ldap_port     VARCHAR2(256) := '636';
+  l_ldap_base     VARCHAR2(256) := 'OU=Users,OU=<>,DC=<countr code> etc...';
+  ldap_user       varchar(100)  := 'cn='||trim(p_username)||','||l_ldap_base;
+  l_retval        INTEGER := -1;
+  l_session       DBMS_LDAP.session;
+  
+  errmsg varchar2(255);
+  errcode varchar2(55);
+  
+BEGIN
+  IF p_username IS NULL OR p_password IS NULL THEN
+    --RAISE_APPLICATION_ERROR(-20000, 'Credentials must be specified.');
+    l_retval := 2;
+    RETURN l_retval;
+  END IF;
+    
+  -- Choose to raise exceptions.
+  DBMS_LDAP.use_exception := TRUE;
+  -- Connect to the LDAP server.
+  l_session := DBMS_LDAP.init(hostname => l_ldap_host,
+                              portnum  => l_ldap_port);
+  l_retval := DBMS_LDAP.open_ssl(ld              => l_session,
+                                 sslwrl          => 'file:F:\oracle\admin\<SERVICE NAME>\wallet',
+                                 sslwalletpasswd => '<WALLET PASS>',
+                                 sslauth         => 2); 
+  l_retval := DBMS_LDAP.simple_bind_s(ld     => l_session,
+                                      dn     => ldap_user, --l_dn_prefix || p_username,
+                                      passwd => p_password);
+  -- No exceptions mean you are authenticated.
+  l_retval := 0; /* 0 means no error */
+  RETURN l_retval;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Exception means authentication failed. 
+    l_retval := 1;
+    RETURN l_retval;    
+    
+END;
+    
+  
+--==============================================================================
