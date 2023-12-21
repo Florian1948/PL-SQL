@@ -2,10 +2,6 @@
 
 create or replace package handle_ip is
 
-   function f_ip_to_number (
-      pv_ip   in varchar2
-   ) return number;
-
    function f_get_in_range_by_ip (
       pv_ip          in varchar2,
       pv_from_ip     in varchar2,
@@ -17,6 +13,12 @@ end handle_ip;
 /
 
 create or replace package body handle_ip is
+
+   -- no need for 'f_ip_to_number' to be public when only called by 'f_get_in_range_by_ip'
+   function f_ip_to_number (
+      pv_ip   in varchar2
+   ) return number;
+
 
    function f_ip_to_number (
       pv_ip   in varchar2
@@ -32,6 +34,7 @@ create or replace package body handle_ip is
       || lpad(substr(pv_ip,instr(pv_ip,'.',1,2)+1,instr(pv_ip,'.',1,3)-instr(pv_ip,'.',1,2)-1),3,'0')
       || lpad(substr(pv_ip,instr(pv_ip,'.',1,3)+1),3,'0')
       );
+
    return v_ret;
    exception
       when others then return -1;
@@ -47,7 +50,13 @@ create or replace package body handle_ip is
       v_ret int;
 
    begin
-      select nvl(max( <column name> ), -1) into v_ret from <table name> where f_ip_to_number(pv_ip) between f_ip_to_number(pv_from_ip) and f_ip_to_number(pv_to_ip);
+
+      select nvl(max( <column name> ), -1)
+      into v_ret
+      from <table name>
+      where f_ip_to_number(pv_ip)
+      between f_ip_to_number(pv_from_ip)
+      and f_ip_to_number(pv_to_ip);
 
    return  v_ret; /* if -1 then not in the table, -2 error */
 
