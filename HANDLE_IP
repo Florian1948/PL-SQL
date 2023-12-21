@@ -1,6 +1,6 @@
 /* ip address converted to number, e.g. 192.168.0.11 -> 192168000011 */
 
-create or replace package handle_ip is
+create or replace package handle_ip2 is
 
    function f_get_in_range_by_ip (
       pv_ip          in varchar2,
@@ -8,16 +8,17 @@ create or replace package handle_ip is
       pv_to_ip       in varchar2
    ) return number;
 
-end handle_ip;
-
-/
-
-create or replace package body handle_ip is
-
-   -- no need for 'f_ip_to_number' to be public when only called by 'f_get_in_range_by_ip'
    function f_ip_to_number (
       pv_ip   in varchar2
    ) return number;
+end handle_ip2;
+
+/
+
+create or replace package body handle_ip2 is
+
+   -- no need for 'f_ip_to_number' to be public when only called by 'f_get_in_range_by_ip'
+
 
 
    function f_ip_to_number (
@@ -25,15 +26,48 @@ create or replace package body handle_ip is
    )
    return number
    is
+      v_ip_without_dots          varchar2(32767);
+      v_storage                  varchar2(32767);
+      v_storage2                 varchar2(32767);
+      v_pos_start_for_copy       number := 1;
+      v_pos_dot                  number;
+      c_number_of_points_in_ip   constant number := 4;
+      is_v_storage_active        boolean;
       v_ret number;
    begin
 
-      v_ret := to_number(
-      lpad(substr(pv_ip,1,instr(pv_ip,'.',1,1)-1),3,'0')
-      || lpad(substr(pv_ip,instr(pv_ip,'.',1,1)+1,instr(pv_ip,'.',1,2)-instr(pv_ip,'.',1,1)-1),3,'0')
-      || lpad(substr(pv_ip,instr(pv_ip,'.',1,2)+1,instr(pv_ip,'.',1,3)-instr(pv_ip,'.',1,2)-1),3,'0')
-      || lpad(substr(pv_ip,instr(pv_ip,'.',1,3)+1),3,'0')
-      );
+      v_storage := pv_ip;
+      for i in 1..c_number_of_points_in_ip
+      loop
+         is_v_storage_active := true;
+         v_pos_dot := instr(v_storage, '.');
+         if v_pos_dot = 1 then
+            v_storage2 := substr(v_storage,2);
+            v_pos_dot := instr(v_storage2, '.');
+            v_storage2 := substr(v_storage2, v_pos_start_for_copy, v_pos_dot-1);
+            dbms_output.put_line(v_storage || '  inner');
+            v_storage := substr(v_storage,2);
+            v_pos_dot := instr(v_storage, '.');
+            v_storage :=  substr(v_storage,v_pos_dot);
+
+            is_v_storage_active := false;
+
+         else
+            v_storage2 := substr(v_storage, v_pos_start_for_copy, v_pos_dot-1);
+         end if;
+
+
+         v_ip_without_dots := v_ip_without_dots || v_storage2;
+
+dbms_output.put_line(v_ip_without_dots);
+         if is_v_storage_active then
+            v_storage := substr(pv_ip, length(v_ip_without_dots)+1, length(pv_ip) - length(v_ip_without_dots) );
+            v_storage := substr(v_storage,2);
+         end if;
+dbms_output.put_line(v_storage);
+      end loop;
+      v_ip_without_dots := v_ip_without_dots || v_storage;
+      v_ret := to_number(v_ip_without_dots);
 
    return v_ret;
    exception
@@ -51,6 +85,21 @@ create or replace package body handle_ip is
 
    begin
 
+
+
+
+      v_ret := 1;
+
+      return  1;
+
+   exception
+      when others then return -2;
+   end f_get_in_range_by_ip;
+end handle_ip2;
+/
+
+
+/*
       select nvl(max( <column name> ), -1)
       into v_ret
       from <table name>
@@ -60,8 +109,3 @@ create or replace package body handle_ip is
 
    return  v_ret; /* if -1 then not in the table, -2 error */
 
-   exception
-      when others then return -2;
-   end f_get_in_range_by_ip;
-end handle_ip;
-/
