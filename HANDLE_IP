@@ -1,37 +1,58 @@
-/* IP address converted to number, e.g. 192.168.0.11 -> 192168000011 */
-    CREATE OR REPLACE FUNCTION "F_IP_TO_NUMBER"(
-            ip IN varchar2)
-    RETURN NUMBER
-    IS
-            v_ip varchar2(15);
-            v_ret NUMBER;
-    BEGIN
-            v_ip := ip;
-            v_ret := to_number(
-                               lpad(substr(v_ip,1,instr(v_ip,'.',1,1)-1),3,'0')
-                            || lpad(substr(v_ip,instr(v_ip,'.',1,1)+1,instr(v_ip,'.',1,2)-instr(v_ip,'.',1,1)-1),3,'0')
-                            || lpad(substr(v_ip,instr(v_ip,'.',1,2)+1,instr(v_ip,'.',1,3)-instr(v_ip,'.',1,2)-1),3,'0')
-                            || lpad(substr(v_ip,instr(v_ip,'.',1,3)+1),3,'0')
-                            );
-            RETURN v_ret;
-    EXCEPTION
-            WHEN OTHERS THEN RETURN -1;
-    
-    END;
+/* ip address converted to number, e.g. 192.168.0.11 -> 192168000011 */
 
+create or replace package handle_ip is
 
-/* Function to check if INPUT ip is in range */
-    CREATE OR REPLACE FUNCTION "F_GET_IN_RANGE_BY_IP"(ip IN varchar2)
-    RETURN INT
-    IS
-            v_ip varchar2(15);
-            v_ret int;
-            
-    BEGIN
-            v_ip := ip;
-            SELECT NVL(MAX( <column name> ), -1) INTO v_ret FROM <table name> WHERE F_IP_TO_NUMBER(v_ip) BETWEEN F_IP_TO_NUMBER(IP_FROM) AND F_IP_TO_NUMBER(IP_TO);
-            
-    RETURN v_ret; /* IF -1 THEN NOT IN THE TABLE, -2 ERROR */
-    
-    EXCEPTION WHEN OTHERS THEN RETURN -2;
-    END;
+   function f_ip_to_number (
+      pv_ip   in varchar2
+   ) return number;
+
+   function f_get_in_range_by_ip (
+      pv_ip          in varchar2,
+      pv_from_ip     in varchar2,
+      pv_to_ip       in varchar2
+   ) return number;
+
+end handle_ip;
+
+/
+
+create or replace package body handle_ip is
+
+   function f_ip_to_number (
+      pv_ip   in varchar2
+   )
+   return number
+   is
+      v_ret number;
+   begin
+
+      v_ret := to_number(
+      lpad(substr(pv_ip,1,instr(pv_ip,'.',1,1)-1),3,'0')
+      || lpad(substr(pv_ip,instr(pv_ip,'.',1,1)+1,instr(pv_ip,'.',1,2)-instr(pv_ip,'.',1,1)-1),3,'0')
+      || lpad(substr(pv_ip,instr(pv_ip,'.',1,2)+1,instr(pv_ip,'.',1,3)-instr(pv_ip,'.',1,2)-1),3,'0')
+      || lpad(substr(pv_ip,instr(pv_ip,'.',1,3)+1),3,'0')
+      );
+   return v_ret;
+   exception
+      when others then return -1;
+   end f_ip_to_number;
+
+   function f_get_in_range_by_ip (
+      pv_ip          in varchar2,
+      pv_from_ip     in varchar2,
+      pv_to_ip       in varchar2
+   )
+   return number
+   is
+      v_ret int;
+
+   begin
+      select nvl(max( <column name> ), -1) into v_ret from <table name> where f_ip_to_number(pv_ip) between f_ip_to_number(pv_from_ip) and f_ip_to_number(pv_to_ip);
+
+   return  v_ret; /* if -1 then not in the table, -2 error */
+
+   exception
+      when others then return -2;
+   end f_get_in_range_by_ip;
+end handle_ip;
+/
