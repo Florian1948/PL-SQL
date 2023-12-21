@@ -27,8 +27,8 @@ create or replace package body handle_ip2 is
    return number
    is
       v_ip_without_dots          varchar2(32767);
-      v_storage                  varchar2(32767);
-      v_storage2                 varchar2(32767);
+      v_string_end_save                  varchar2(32767);
+      v_string_cut_out                 varchar2(32767);
       v_pos_start_for_copy       number := 1;
       v_pos_dot                  number;
       c_number_of_points_in_ip   constant number := 4;
@@ -36,37 +36,36 @@ create or replace package body handle_ip2 is
       v_ret number;
    begin
 
-      v_storage := pv_ip;
+      v_string_end_save := pv_ip;
       for i in 1..c_number_of_points_in_ip
       loop
          is_v_storage_active := true;
-         v_pos_dot := instr(v_storage, '.');
+         v_pos_dot := instr(v_string_end_save, '.');
          if v_pos_dot = 1 then
-            v_storage2 := substr(v_storage,2);
-            v_pos_dot := instr(v_storage2, '.');
-            v_storage2 := substr(v_storage2, v_pos_start_for_copy, v_pos_dot-1);
-            dbms_output.put_line(v_storage || '  inner');
-            v_storage := substr(v_storage,2);
-            v_pos_dot := instr(v_storage, '.');
-            v_storage :=  substr(v_storage,v_pos_dot);
+            v_string_cut_out := substr(v_string_end_save,2);
+            v_pos_dot := instr(v_string_cut_out, '.');
+            v_string_cut_out := substr(v_string_cut_out, v_pos_start_for_copy, v_pos_dot-1);
+            dbms_output.put_line(v_string_end_save || '  inner');
+            v_string_end_save := substr(v_string_end_save,2);
+            v_pos_dot := instr(v_string_end_save, '.');
+            v_string_end_save :=  substr(v_string_end_save,v_pos_dot);
 
             is_v_storage_active := false;
 
          else
-            v_storage2 := substr(v_storage, v_pos_start_for_copy, v_pos_dot-1);
+            v_string_cut_out := substr(v_string_end_save, v_pos_start_for_copy, v_pos_dot-1);
          end if;
 
-
-         v_ip_without_dots := v_ip_without_dots || v_storage2;
+         v_ip_without_dots := v_ip_without_dots || v_string_cut_out;
 
 dbms_output.put_line(v_ip_without_dots);
          if is_v_storage_active then
-            v_storage := substr(pv_ip, length(v_ip_without_dots)+1, length(pv_ip) - length(v_ip_without_dots) );
-            v_storage := substr(v_storage,2);
+            v_string_end_save := substr(pv_ip, length(v_ip_without_dots)+1, length(pv_ip) - length(v_ip_without_dots) );
+            v_string_end_save := substr(v_string_end_save,2);
          end if;
-dbms_output.put_line(v_storage);
+dbms_output.put_line(v_string_end_save);
       end loop;
-      v_ip_without_dots := v_ip_without_dots || v_storage;
+      v_ip_without_dots := v_ip_without_dots || v_string_end_save;
       v_ret := to_number(v_ip_without_dots);
 
    return v_ret;
